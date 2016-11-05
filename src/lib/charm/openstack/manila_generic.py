@@ -181,7 +181,7 @@ class ManilaGenericCharm(charms_openstack.charm.OpenStackCharm):
                     "reason": "Problem: share-backend-name is not set"}
         # we use the same username/password/auth for each section as every
         # service user has then same permissions as admin.
-        auth_section = (
+        auth_section = self.process_lines((
             "# Only needed for the generic drivers as of Mitaka",
             ('username', auth_data['username']),
             ('password', auth_data['password']),
@@ -190,7 +190,7 @@ class ManilaGenericCharm(charms_openstack.charm.OpenStackCharm):
             ('user_domain_id', auth_data['user_domain_id']),
             ('auth_uri', auth_data['auth_uri']),
             ('auth_url', auth_data['auth_url']),
-            ('auth_type', auth_data['auth_type']))
+            ('auth_type', auth_data['auth_type'])))
 
         # Expression is True if the generic driver should use a password rather
         # than an ssh key.
@@ -213,7 +213,7 @@ class ManilaGenericCharm(charms_openstack.charm.OpenStackCharm):
             ssh_section = "# No ssh section"
 
         # And finally configure the generic section
-        generic_section = (
+        generic_section = self.process_lines((
             "# Set usage of Generic driver which uses cinder as backend.",
             "share_driver = manila.share.drivers.generic.GenericShareDriver",
             "",
@@ -250,7 +250,7 @@ class ManilaGenericCharm(charms_openstack.charm.OpenStackCharm):
             ssh_section,
             "",
             "# Custom name for share backend.",
-            ("share_backend_name", options.share_backend_name))
+            ("share_backend_name", options.share_backend_name)))
 
         return {
             "complete": True,
@@ -261,3 +261,29 @@ class ManilaGenericCharm(charms_openstack.charm.OpenStackCharm):
                 "[{}]".format(options.share_backend_name): generic_section,
             },
         }
+
+    @staticmethod
+    def process_lines(lines):
+        """Process each of the lines.  If the line is a string, then just
+        passes it though; if the line is a tuple (and it must be a 2-tuple)
+        then the string is interpolated with an equals.
+
+        :param lines: list of strings or 2-tuples of strings
+        :returns: list of strings
+        """
+        out = []
+        for line in lines:
+            if isinstance(line, str):
+                out.append(line)
+            elif isinstance(line, (list, tuple)):
+                if len(line) != 2:
+                    raise TypeError("Line '{}' must be length 2"
+                                    .format(line))
+                out.append("{} = {}".format(*line))
+            # raise an error on other types
+            else:
+                raise TypeError("Line '{}' must be a string, tuple or list."
+                                " Passed a {}"
+                                .format(line, type(line)))
+        return out
+

@@ -72,6 +72,6 @@ class TestHandlerFunctions(test_utils.PatchHelper):
         self.assertEqual(manila_plugin.name,
                          generic.options.share_backend_name)
         self.assertEqual(manila_plugin.configuration_data, "some data")
-        generic.get_config_for_principal.assert_called_once_with( 'auth data')
+        generic.get_config_for_principal.assert_called_once_with('auth data')
         generic.assess_status.assert_called_once_with()
         generic.maybe_write_ssh_keys.assert_called_once_with()

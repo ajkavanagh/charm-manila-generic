@@ -18,9 +18,9 @@
 from __future__ import absolute_import
 
 import os
-import re
 import textwrap
 
+import charmhelpers.core.hookenv as hookenv
 import charms_openstack.charm
 import charms_openstack.adapters
 
@@ -178,8 +178,8 @@ class ManilaGenericCharm(charms_openstack.charm.OpenStackCharm):
                 "",
                 "# Generic driver supports both driver modes - "
                 "with and without handling",
-                "# of share servers. So, we need to define explicitly which one "
-                "we are",
+                "# of share servers. So, we need to define explicitly which "
+                "one we are",
                 "# enabling using this driver.",
                 "driver_handles_share_servers = False",
                 "# Custom name for share backend.",
@@ -258,11 +258,11 @@ class ManilaGenericCharm(charms_openstack.charm.OpenStackCharm):
             "keys",
             "# will no longer be the same -- need to be able to set these via",
             "# a config option.",
-            service_instance_password, )
-            + ssh_section +
+            service_instance_password, ) +
+            ssh_section +
             ("",
-            "# Custom name for share backend.",
-            ("share_backend_name", options.share_backend_name)))
+             "# Custom name for share backend.",
+             ("share_backend_name", options.share_backend_name)))
 
         return {
             "complete": True,
@@ -336,4 +336,3 @@ def write_file(contents, file, chown=0o600):
             f.write(textwrap.dedent(contents))
     except OSError as e:
         hookenv.log("Couldn't write pins file: {}".format(str(e)))
-

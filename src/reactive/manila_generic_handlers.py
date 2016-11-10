@@ -17,7 +17,6 @@ from __future__ import absolute_import
 
 import charms.reactive
 import charms_openstack.charm
-import charmhelpers.core.hookenv as hookenv
 
 # This charm's library contains all of the handler code associated with
 # manila -- we need to import it to get the definitions for the charm.

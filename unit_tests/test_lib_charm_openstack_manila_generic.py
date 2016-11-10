@@ -15,8 +15,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
-import unittest
-
 import mock
 
 import charm.openstack.manila_generic as manila_generic
@@ -94,7 +92,8 @@ class TestManilaGenericCharmConfigProperties(Helper):
         self.assertEqual(manila_generic.computed_debug_level(config), "NONE")
         config.debug = True
         config.verbose = False
-        self.assertEqual(manila_generic.computed_debug_level(config), "WARNING")
+        self.assertEqual(
+            manila_generic.computed_debug_level(config), "WARNING")
         config.verbose = True
         self.assertEqual(manila_generic.computed_debug_level(config), "DEBUG")
 
@@ -346,8 +345,6 @@ class TestManilaGenericCharm(Helper):
                        0o644)])
 
 
-
-
 class TestAuxilaryFunctions(Helper):
 
     def test_write_file(self):
@@ -367,7 +364,6 @@ class TestAuxilaryFunctions(Helper):
         self.fdopen.assert_called_once_with('opener', 'w')
         f.__enter__().write.assert_called_once_with("This\nOne")
 
-
     def test_write_file_private(self):
         f = mock.MagicMock()
         self.patch_object(manila_generic.os, 'fdopen', return_value=f)
@@ -384,4 +380,3 @@ class TestAuxilaryFunctions(Helper):
             0o644)
         self.fdopen.assert_called_once_with('opener', 'w')
         f.__enter__().write.assert_called_once_with("This\nTwo")
-

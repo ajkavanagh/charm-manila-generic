@@ -17,35 +17,23 @@
 # needed on the class.
 from __future__ import absolute_import
 
+import os
 import re
-import subprocess
-
-import charmhelpers.contrib.openstack.utils as ch_utils
-import charmhelpers.core.hookenv as hookenv
-import charmhelpers.core.unitdata as unitdata
-import charmhelpers.fetch
+import textwrap
 
 import charms_openstack.charm
 import charms_openstack.adapters
-import charms_openstack.ip as os_ip
 
 # There are no additional packages to install.
 PACKAGES = []
 MANILA_DIR = '/etc/manila/'
 MANILA_CONF = MANILA_DIR + "manila.conf"
 
+MANILA_SSH_KEY_PATH = '/etc/manila/ssh_image_key'
+MANILA_SSH_KEY_PATH_PUBLIC = '/etc/manila/ssh_image_key.pub'
+
 # select the default release function and ssl feature
 charms_openstack.charm.use_defaults('charm.default-select-release')
-
-def strip_join(s, divider=" "):
-    """Cleanup the string passed, split on whitespace and then rejoin it cleanly
-
-    :param s: A sting to cleanup, remove non alpha chars and then represent the
-        string.
-    :param divider: The joining string to put the bits back together again.
-    :returns: string
-    """
-    return divider.join(re.split(r'\s+', re.sub(r'([^\s\w-])+', '', (s or ""))))
 
 
 ###
@@ -137,10 +125,10 @@ class ManilaGenericCharm(charms_openstack.charm.OpenStackCharm):
             return 'blocked', "Missing 'driver-service-instance-user'"
         if not options.driver_service_instance_flavor_id:
             return ('blocked',
-                    "Missing 'driver-service-instance-flavor-id")
+                    "Missing 'driver-service-instance-flavor-id'")
         # Need at least one of the password or the keypair
-        if (not bool(options.driver_service_instance_password) and
-                not bool(options.driver_keypair_name)):
+        if not(bool(options.driver_service_instance_password) or
+                bool(options.driver_keypair_name)):
             return ('blocked',
                     "Need at least one of instance password or keypair name")
         return None, None
@@ -176,9 +164,33 @@ class ManilaGenericCharm(charms_openstack.charm.OpenStackCharm):
             return {"complete": False, "reason": message}
         options = self.options  # tiny optimisation for less typing.
         # We have the auth data & the config is reasonably sensible.
-        if options.share_backend_name is None:
+        if not options.share_backend_name:
             return {"complete": False,
                     "reason": "Problem: share-backend-name is not set"}
+
+        # if the driver is not going to handle the share servers then we only
+        # need a very simple config section
+        if not options.driver_handles_share_servers:
+            generic_section = self.process_lines((
+                "# Set usage of Generic driver which uses cinder as backend.",
+                "share_driver = "
+                "manila.share.drivers.generic.GenericShareDriver",
+                "",
+                "# Generic driver supports both driver modes - "
+                "with and without handling",
+                "# of share servers. So, we need to define explicitly which one "
+                "we are",
+                "# enabling using this driver.",
+                "driver_handles_share_servers = False",
+                "# Custom name for share backend.",
+                ("share_backend_name", options.share_backend_name)))
+            return {
+                "complete": True,
+                MANILA_CONF: {
+                    "[{}]".format(options.share_backend_name): generic_section,
+                },
+            }
+
         # we use the same username/password/auth for each section as every
         # service user has then same permissions as admin.
         auth_section = self.process_lines((
@@ -204,13 +216,13 @@ class ManilaGenericCharm(charms_openstack.charm.OpenStackCharm):
         # Expression is True if the generic driver should use a password rather
         # than an ssh key.
         if options.computed_use_ssh:
-            ssh_section = (
-                ("path_to_private_key", "/etc/ssh/ssh_host_rsa_key"),
-                ("path_to_public_key", "/etc/ssh/ssh_host_rsa_key.pub"),
+            ssh_section = tuple(self.process_lines((
+                ("path_to_private_key", MANILA_SSH_KEY_PATH),
+                ("path_to_public_key", MANILA_SSH_KEY_PATH_PUBLIC),
                 ("manila_service_keypair_name",
-                 options.driver_keypair_name))
+                 options.driver_keypair_name))))
         else:
-            ssh_section = "# No ssh section"
+            ssh_section = ("# No ssh section", )
 
         # And finally configure the generic section
         generic_section = self.process_lines((
@@ -246,9 +258,9 @@ class ManilaGenericCharm(charms_openstack.charm.OpenStackCharm):
             "keys",
             "# will no longer be the same -- need to be able to set these via",
             "# a config option.",
-            service_instance_password,
-            ssh_section,
-            "",
+            service_instance_password, )
+            + ssh_section +
+            ("",
             "# Custom name for share backend.",
             ("share_backend_name", options.share_backend_name)))
 
@@ -286,4 +298,42 @@ class ManilaGenericCharm(charms_openstack.charm.OpenStackCharm):
                                 " Passed a {}"
                                 .format(line, type(line)))
         return out
+
+    def maybe_write_ssh_keys(self):
+        """Maybe write the ssh keys from the options to the key files where
+        manila will be able to find them.  The function only writes them if the
+        configuration is to use the SSH config.  If they are not to be written
+        and they exist then they are deleted.
+        """
+        if (self.options.computed_use_ssh and
+                self.options.computed_define_ssh):
+            write_file(self.options.driver_service_ssh_key,
+                       MANILA_SSH_KEY_PATH)
+            write_file(self.options.driver_service_ssh_key_public,
+                       MANILA_SSH_KEY_PATH_PUBLIC, 0o644)
+        else:
+            for f in (MANILA_SSH_KEY_PATH, MANILA_SSH_KEY_PATH_PUBLIC):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
+
+
+def write_file(contents, file, chown=0o600):
+    """Write the contents to the file.
+
+    :param contents: the contents to write.  This will be dedented, and striped
+        to ensure that it is just a set of lines.
+    :param file: the file to write
+    :param chown: the ownership for the file.
+    :raises OSError: If the file couldn't be written.
+    :returns None:
+    """
+    try:
+        with os.fdopen(os.open(file,
+                               os.O_WRONLY | os.O_CREAT,
+                               chown), 'w') as f:
+            f.write(textwrap.dedent(contents))
+    except OSError as e:
+        hookenv.log("Couldn't write pins file: {}".format(str(e)))
 

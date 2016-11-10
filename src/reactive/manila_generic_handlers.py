@@ -31,11 +31,9 @@ charms_openstack.charm.use_defaults(
 
 
 @charms.reactive.when('manila-plugin.available')
-# @charms.reactive.when_any('config.changed')
+@charms.reactive.when_not('config.changed')
 def send_config(manila_plugin):
     """Send the configuration over to the prinicpal charm"""
-    hookenv.log("ManilaGeneric (subordinate): send_config() called",
-                level=hookenv.DEBUG)
     with charms_openstack.charm.provide_charm_instance() as generic_charm:
         # set the name of the backend using the configuration option
         manila_plugin.name = generic_charm.options.share_backend_name
@@ -43,4 +41,11 @@ def send_config(manila_plugin):
         manila_plugin.configuration_data = (
             generic_charm.get_config_for_principal(
                 manila_plugin.authentication_data))
+        generic_charm.maybe_write_ssh_keys()
         generic_charm.assess_status()
+
+
+@charms.reactive.when('manila-plugin.available',
+                      'config.changed')
+def update_config(manila_plugin):
+    send_config(manila_plugin)

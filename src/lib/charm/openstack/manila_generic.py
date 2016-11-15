@@ -335,4 +335,4 @@ def write_file(contents, file, chown=0o600):
                                chown), 'w') as f:
             f.write(textwrap.dedent(contents))
     except OSError as e:
-        hookenv.log("Couldn't write pins file: {}".format(str(e)))
+        hookenv.log("Couldn't write file: {}".format(str(e)))
